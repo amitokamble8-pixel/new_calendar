@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Application Deadlines Calendar</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
+  <style>
+:root {
+  --bg: #f6f7fb;
+  --panel: #ffffff;
+  --text: #1d2433;
+  --muted: #6b7385;
+  --border: #e3e6ee;
+  --accent: #3b5bdb;
+  --accent-soft: #e7ecff;
+  --danger: #d6336c;
+  --today: #fff4d6;
+  --radius: 10px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+button, input, select, textarea { font: inherit; }
+
+button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+button:hover { border-color: #c5cad8; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { color: var(--danger); }
+input, select, textarea {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #fff;
+}
+
+/* Top bar */
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.brand h1 { margin: 0; font-size: 1.25rem; }
+.subtitle { color: var(--muted); font-size: .85rem; }
+.actions { display: flex; gap: 8px; align-items: center; }
+.menu { position: relative; }
+.menu-list {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,.08); display: flex; flex-direction: column; min-width: 220px; padding: 4px;
+}
+.menu-list button { border: none; text-align: left; border-radius: 6px; }
+.menu-list button:hover { background: var(--bg); }
+
+/* Toolbar */
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center;
+  padding: 12px 24px;
+}
+.nav { display: flex; align-items: center; gap: 6px; }
+.nav h2 { margin: 0 0 0 10px; font-size: 1.2rem; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#searchInput { min-width: 240px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: none; border-radius: 0; }
+.seg button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* Layout */
+.layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; padding: 0 24px 24px; }
+@media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+
+/* Month grid */
+.calendar {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+}
+.weekdays, .grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.weekdays div {
+  padding: 8px; font-size: .8rem; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; border-bottom: 1px solid var(--border);
+}
+.cell {
+  min-height: 112px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0;
+}
+.cell:nth-child(7n) { border-right: none; }
+.cell:hover { background: #fafbff; }
+.cell.other { background: #fbfbfd; color: #b0b5c3; }
+.cell.today { background: var(--today); }
+.cell .num { font-size: .85rem; font-weight: 600; }
+.cell.today .num {
+  background: var(--accent); color: #fff; border-radius: 999px; width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.chip {
+  font-size: .75rem; padding: 2px 6px; border-radius: 5px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; border-left: 3px solid; cursor: pointer;
+}
+.chip.done { opacity: .45; text-decoration: line-through; }
+.chip.high::before { content: "● "; color: var(--danger); }
+.more { font-size: .75rem; color: var(--muted); }
+
+/* Agenda */
+.agenda {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 16px 16px;
+}
+.agenda h4 {
+  margin: 18px 0 6px; font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em;
+}
+.agenda-item {
+  display: grid; grid-template-columns: 110px 1fr auto; gap: 12px; align-items: center;
+  padding: 10px; border-radius: 8px; border-left: 4px solid; margin-bottom: 6px; background: #fafbfe; cursor: pointer;
+}
+.agenda-item:hover { background: #f1f3fb; }
+.agenda-item.done { opacity: .5; }
+.agenda-item.done .t { text-decoration: line-through; }
+.agenda-item .d { font-weight: 600; font-size: .9rem; }
+.agenda-item .t { font-weight: 600; }
+.agenda-item .meta { font-size: .82rem; color: var(--muted); }
+.badge { font-size: .75rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); white-space: nowrap; }
+.badge.urgent { background: #ffe3ec; color: var(--danger); font-weight: 600; }
+.badge.past { background: #eee; }
+.empty { color: var(--muted); padding: 24px; text-align: center; }
+
+/* Sidebar */
+.sidebar {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 16px; align-self: start; position: sticky; top: 12px;
+}
+.sidebar h3 { font-size: .9rem; margin: 8px 0; }
+.upcoming, .legend, .day-list { list-style: none; margin: 0; padding: 0; }
+.upcoming li {
+  padding: 8px; border-radius: 8px; border-left: 3px solid; margin-bottom: 6px; background: #fafbfe; cursor: pointer;
+}
+.upcoming li .t { font-size: .88rem; font-weight: 600; }
+.upcoming li .meta { font-size: .78rem; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+.legend li { display: flex; align-items: center; gap: 8px; font-size: .85rem; margin-bottom: 4px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; }
+
+/* Dialogs */
+dialog {
+  border: none; border-radius: 14px; padding: 20px 22px; width: min(560px, 94vw);
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+dialog::backdrop { background: rgba(20,24,40,.35); }
+dialog h3 { margin-top: 0; }
+#editForm label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); margin-bottom: 10px; }
+#editForm label.check { flex-direction: row; }
+#editForm .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.dialog-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.spacer { flex: 1; }
+.day-list li {
+  border-left: 4px solid; padding: 8px 10px; background: #fafbfe; border-radius: 8px; margin-bottom: 8px; cursor: pointer;
+}
+.day-list .meta { font-size: .82rem; color: var(--muted); }
+.day-list a { font-size: .82rem; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: #1d2433; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: .9rem; z-index: 50;
+}
+[hidden] { display: none !important; }
+
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Application Deadlines</h1>
+      <span class="subtitle" id="todayLabel"></span>
+    </div>
+    <div class="actions">
+      <button id="addBtn" class="primary">+ Add deadline</button>
+      <div class="menu">
+        <button id="menuBtn" aria-haspopup="true">Data ▾</button>
+        <div class="menu-list" id="menuList" hidden>
+          <button id="importCsvBtn">Import CSV…</button>
+          <button id="exportCsvBtn">Export CSV</button>
+          <button id="exportIcsBtn">Export to calendar (.ics)</button>
+          <button id="resetBtn" class="danger">Clear all deadlines</button>
+        </div>
+      </div>
+      <input type="file" id="csvInput" accept=".csv,text/csv" hidden />
+    </div>
+  </header>
+
+  <section class="toolbar">
+    <div class="nav">
+      <button id="prevBtn" aria-label="Previous">‹</button>
+      <button id="todayBtn">Today</button>
+      <button id="nextBtn" aria-label="Next">›</button>
+      <h2 id="periodLabel"></h2>
+    </div>
+    <div class="filters">
+      <input type="search" id="searchInput" placeholder="Search university, title, notes…" />
+      <select id="countryFilter"><option value="">All countries</option></select>
+      <select id="typeFilter"><option value="">All types</option></select>
+      <label class="check"><input type="checkbox" id="hideDone" /> Hide completed</label>
+      <div class="seg" role="tablist">
+        <button data-view="month" class="active">Month</button>
+        <button data-view="agenda">List</button>
+      </div>
+    </div>
+  </section>
+
+  <main class="layout">
+    <section id="calendarView" class="calendar"></section>
+    <section id="agendaView" class="agenda" hidden></section>
+
+    <aside class="sidebar">
+      <h3>Coming up</h3>
+      <ul id="upcomingList" class="upcoming"></ul>
+      <h3>Legend</h3>
+      <ul id="legend" class="legend"></ul>
+    </aside>
+  </main>
+
+  <!-- Add / edit dialog -->
+  <dialog id="editDialog">
+    <form id="editForm" method="dialog">
+      <h3 id="dialogTitle">Add deadline</h3>
+      <label>Title* <input name="title" required placeholder="e.g. UCAS application" /></label>
+      <label>University / organisation <input name="institution" placeholder="e.g. University of Edinburgh" /></label>
+      <div class="row">
+        <label>Date* <input type="date" name="date" required /></label>
+        <label>Time <input type="time" name="time" /></label>
+        <label>Time zone <input name="timezone" placeholder="e.g. GMT, ET" /></label>
+      </div>
+      <div class="row">
+        <label>Country <input name="country" list="countryList" placeholder="e.g. UK" /></label>
+        <label>Type
+          <select name="type">
+            <option>Application</option>
+            <option>Early Decision</option>
+            <option>Early Action</option>
+            <option>Regular Decision</option>
+            <option>Admissions test</option>
+            <option>Scholarship</option>
+            <option>Financial aid</option>
+            <option>Interview</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Priority
+          <select name="priority">
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+      </div>
+      <label>Link <input type="url" name="link" placeholder="https://…" /></label>
+      <label>Notes <textarea name="notes" rows="3"></textarea></label>
+      <label class="check"><input type="checkbox" name="done" /> Completed</label>
+      <datalist id="countryList"></datalist>
+      <div class="dialog-actions">
+        <button type="button" id="deleteBtn" class="danger" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancelBtn">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Day detail dialog -->
+  <dialog id="dayDialog">
+    <h3 id="dayTitle"></h3>
+    <ul id="dayList" class="day-list"></ul>
+    <div class="dialog-actions">
+      <button type="button" id="dayAddBtn" class="primary">+ Add on this day</button>
+      <span class="spacer"></span>
+      <button type="button" id="dayCloseBtn">Close</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script>
+/* Application Deadlines Calendar — no build step, no dependencies. */
+(() => {
+  const STORAGE_KEY = "deadline-calendar:v1";
+  const TYPE_COLORS = {
+    "Application": "#3b5bdb",
+    "Early Decision": "#d6336c",
+    "Early Action": "#f76707",
+    "Regular Decision": "#1c7ed6",
+    "Admissions test": "#7048e8",
+    "Scholarship": "#2f9e44",
+    "Financial aid": "#0c8599",
+    "Interview": "#e8590c",
+    "Other": "#868e96",
+  };
+  const CSV_FIELDS = ["title", "institution", "country", "type", "date", "time", "timezone", "priority", "link", "notes", "done"];
+
+  const state = {
+    deadlines: [],
+    view: "month",
+    cursor: startOfMonth(new Date()),
+    filters: { search: "", country: "", type: "", hideDone: false },
+    editingId: null,
+    dayDialogDate: null,
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- Date helpers (all dates handled as local YYYY-MM-DD) ----------
+  function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+  function toKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function fromKey(k) { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); }
+  function todayKey() { return toKey(new Date()); }
+  function daysUntil(key) {
+    const t = fromKey(todayKey());
+    return Math.round((fromKey(key) - t) / 86400000);
+  }
+  function fmtDate(key, opts = { weekday: "short", day: "numeric", month: "short", year: "numeric" }) {
+    return fromKey(key).toLocaleDateString("en-GB", opts);
+  }
+  function countdownLabel(key) {
+    const n = daysUntil(key);
+    if (n === 0) return { text: "Today", cls: "urgent" };
+    if (n === 1) return { text: "Tomorrow", cls: "urgent" };
+    if (n < 0) return { text: `${-n}d ago`, cls: "past" };
+    return { text: `in ${n}d`, cls: n <= 7 ? "urgent" : "" };
+  }
+
+  // ---------- Storage ----------
+  function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
+  function normalise(d) {
+    return {
+      id: d.id || uid(),
+      title: String(d.title || "").trim(),
+      institution: String(d.institution || "").trim(),
+      country: String(d.country || "").trim(),
+      type: TYPE_COLORS[d.type] ? d.type : (d.type ? String(d.type).trim() : "Other"),
+      date: String(d.date || "").trim(),
+      time: String(d.time || "").trim(),
+      timezone: String(d.timezone || "").trim(),
+      priority: ["high", "low", "normal"].includes(String(d.priority).toLowerCase()) ? String(d.priority).toLowerCase() : "normal",
+      link: String(d.link || "").trim(),
+      notes: String(d.notes || "").trim(),
+      done: d.done === true || String(d.done).toLowerCase() === "true" || d.done === "1" || String(d.done).toLowerCase() === "yes",
+    };
+  }
+  function isValid(d) { return d.title && /^\d{4}-\d{2}-\d{2}$/.test(d.date) && !isNaN(fromKey(d.date)); }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.deadlines)); } catch (_) { /* storage unavailable */ }
+  }
+  const EMBEDDED_DEFAULTS = [{"id": "d-harvard-restrictive-early-action-rea", "title": "Restrictive Early Action (REA)", "institution": "Harvard University", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-harvard-regular-decision", "title": "Regular Decision", "institution": "Harvard University", "country": "USA", "type": "Regular Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-yale-single-choice-early-action-scea", "title": "Single-Choice Early Action (SCEA)", "institution": "Yale University", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-yale-regular-decision", "title": "Regular Decision", "institution": "Yale University", "country": "USA", "type": "Regular Decision", "date": "2027-01-02", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-princeton-single-choice-early-action-scea", "title": "Single-Choice Early Action (SCEA)", "institution": "Princeton University", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-princeton-regular-decision", "title": "Regular Decision", "institution": "Princeton University", "country": "USA", "type": "Regular Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-columbia-early-decision", "title": "Early Decision", "institution": "Columbia University", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-columbia-regular-decision", "title": "Regular Decision", "institution": "Columbia University", "country": "USA", "type": "Regular Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-penn-early-decision", "title": "Early Decision", "institution": "University of Pennsylvania", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-penn-regular-decision", "title": "Regular Decision", "institution": "University of Pennsylvania", "country": "USA", "type": "Regular Decision", "date": "2027-01-05", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-brown-early-decision", "title": "Early Decision", "institution": "Brown University", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-brown-regular-decision", "title": "Regular Decision", "institution": "Brown University", "country": "USA", "type": "Regular Decision", "date": "2027-01-05", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-cornell-early-decision", "title": "Early Decision", "institution": "Cornell University", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "Other required materials due 13 Nov 2026.", "done": false}, {"id": "d-cornell-regular-decision", "title": "Regular Decision", "institution": "Cornell University", "country": "USA", "type": "Regular Decision", "date": "2027-01-02", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Other required materials due 19 Jan 2027.", "done": false}, {"id": "d-dartmouth-early-decision", "title": "Early Decision", "institution": "Dartmouth College", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-dartmouth-regular-decision", "title": "Regular Decision", "institution": "Dartmouth College", "country": "USA", "type": "Regular Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-stanford-restrictive-early-action-rea", "title": "Restrictive Early Action (REA)", "institution": "Stanford University", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "Applicants with an arts portfolio: 15 Oct 2026.", "done": false}, {"id": "d-stanford-regular-decision", "title": "Regular Decision", "institution": "Stanford University", "country": "USA", "type": "Regular Decision", "date": "2027-01-05", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Applicants with an arts portfolio: 5 Dec 2026.", "done": false}, {"id": "d-mit-early-action", "title": "Early Action", "institution": "MIT", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-mit-regular-decision", "title": "Regular Decision", "institution": "MIT", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-caltech-restrictive-early-action-rea", "title": "Restrictive Early Action (REA)", "institution": "Caltech", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-caltech-regular-decision", "title": "Regular Decision", "institution": "Caltech", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "One source lists 3 Jan — Verify on the college's admissions site before relying on it.", "done": false}, {"id": "d-duke-early-decision", "title": "Early Decision", "institution": "Duke University", "country": "USA", "type": "Early Decision", "date": "2026-11-02", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-duke-regular-decision", "title": "Regular Decision", "institution": "Duke University", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "One source lists 5 Jan — Verify on the college's admissions site before relying on it.", "done": false}, {"id": "d-uchicago-early-action", "title": "Early Action", "institution": "University of Chicago", "country": "USA", "type": "Early Action", "date": "2026-11-02", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-uchicago-early-decision-i", "title": "Early Decision I", "institution": "University of Chicago", "country": "USA", "type": "Early Decision", "date": "2026-11-02", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-uchicago-early-decision-ii", "title": "Early Decision II", "institution": "University of Chicago", "country": "USA", "type": "Early Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-uchicago-regular-decision", "title": "Regular Decision", "institution": "University of Chicago", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-northwestern-early-decision", "title": "Early Decision", "institution": "Northwestern University", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-northwestern-regular-decision", "title": "Regular Decision", "institution": "Northwestern University", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-jhu-early-decision-i", "title": "Early Decision I", "institution": "Johns Hopkins University", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-jhu-early-decision-ii", "title": "Early Decision II", "institution": "Johns Hopkins University", "country": "USA", "type": "Early Decision", "date": "2027-01-02", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-jhu-regular-decision", "title": "Regular Decision", "institution": "Johns Hopkins University", "country": "USA", "type": "Regular Decision", "date": "2027-01-02", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-vanderbilt-early-decision-i", "title": "Early Decision I", "institution": "Vanderbilt University", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-vanderbilt-early-decision-ii", "title": "Early Decision II", "institution": "Vanderbilt University", "country": "USA", "type": "Early Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-vanderbilt-regular-decision", "title": "Regular Decision", "institution": "Vanderbilt University", "country": "USA", "type": "Regular Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-rice-early-decision-i", "title": "Early Decision I", "institution": "Rice University", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-rice-early-decision-ii", "title": "Early Decision II", "institution": "Rice University", "country": "USA", "type": "Early Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-rice-regular-decision", "title": "Regular Decision", "institution": "Rice University", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-washu-early-action", "title": "Early Action", "institution": "Washington University in St. Louis", "country": "USA", "type": "Early Action", "date": "2026-11-02", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-washu-early-decision-i", "title": "Early Decision I", "institution": "Washington University in St. Louis", "country": "USA", "type": "Early Decision", "date": "2026-11-02", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-washu-early-decision-ii", "title": "Early Decision II", "institution": "Washington University in St. Louis", "country": "USA", "type": "Early Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-washu-regular-decision", "title": "Regular Decision", "institution": "Washington University in St. Louis", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-notredame-restrictive-early-action-rea", "title": "Restrictive Early Action (REA)", "institution": "University of Notre Dame", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-notredame-regular-decision", "title": "Regular Decision", "institution": "University of Notre Dame", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-georgetown-early-action", "title": "Early Action", "institution": "Georgetown University", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-georgetown-regular-decision", "title": "Regular Decision", "institution": "Georgetown University", "country": "USA", "type": "Regular Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Georgetown's admissions page says 1 Jan; some other pages say 10 Jan — Verify on the college's admissions site before relying on it.", "done": false}, {"id": "d-cmu-early-decision", "title": "Early Decision", "institution": "Carnegie Mellon University", "country": "USA", "type": "Early Decision", "date": "2026-11-02", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "Sources differ (2 or 3 Nov) — Verify on the college's admissions site before relying on it.", "done": false}, {"id": "d-cmu-regular-decision", "title": "Regular Decision", "institution": "Carnegie Mellon University", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Sources differ (4 or 5 Jan); drama & music due 1 Dec — Verify on the college's admissions site before relying on it.", "done": false}, {"id": "d-emory-early-decision-i", "title": "Early Decision I", "institution": "Emory University", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-emory-early-decision-ii", "title": "Early Decision II", "institution": "Emory University", "country": "USA", "type": "Early Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-emory-regular-decision", "title": "Regular Decision", "institution": "Emory University", "country": "USA", "type": "Regular Decision", "date": "2027-01-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-tufts-early-decision-i", "title": "Early Decision I", "institution": "Tufts University", "country": "USA", "type": "Early Decision", "date": "2026-11-02", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-tufts-early-decision-ii", "title": "Early Decision II", "institution": "Tufts University", "country": "USA", "type": "Early Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-tufts-regular-decision", "title": "Regular Decision", "institution": "Tufts University", "country": "USA", "type": "Regular Decision", "date": "2027-01-04", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-michigan-early-action", "title": "Early Action", "institution": "University of Michigan", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-michigan-early-decision", "title": "Early Decision", "institution": "University of Michigan", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-michigan-regular-decision", "title": "Regular Decision", "institution": "University of Michigan", "country": "USA", "type": "Regular Decision", "date": "2027-02-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "", "done": false}, {"id": "d-uva-early-action", "title": "Early Action", "institution": "University of Virginia", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-uva-early-decision", "title": "Early Decision", "institution": "University of Virginia", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-uva-regular-decision", "title": "Regular Decision", "institution": "University of Virginia", "country": "USA", "type": "Regular Decision", "date": "2027-01-05", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Single source only — Verify on the college's admissions site before relying on it.", "done": false}, {"id": "d-usc-early-decision", "title": "Early Decision", "institution": "University of Southern California", "country": "USA", "type": "Early Decision", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "New for Fall 2027.", "done": false}, {"id": "d-usc-early-action", "title": "Early Action", "institution": "University of Southern California", "country": "USA", "type": "Early Action", "date": "2026-11-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-usc-regular-decision", "title": "Regular Decision", "institution": "University of Southern California", "country": "USA", "type": "Regular Decision", "date": "2027-01-10", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Dance, music & dramatic arts: 1 Dec 2026, RD only.", "done": false}, {"id": "d-uc-all-campuses", "title": "UC application (all campuses)", "institution": "University of California (UCLA, Berkeley, etc.)", "country": "USA", "type": "Regular Decision", "date": "2026-11-30", "time": "23:59", "timezone": "PT", "priority": "high", "link": "https://admission.universityofcalifornia.edu/", "notes": "Filing period 1–30 Nov 2026. No early round. One application covers all 9 campuses.", "done": false}, {"id": "d-ucas-conservatoires", "title": "UCAS Conservatoires music deadline", "institution": "UCAS Conservatoires", "country": "UK", "type": "Application", "date": "2026-10-01", "time": "18:00", "timezone": "UK time", "priority": "high", "link": "https://www.ucas.com/", "notes": "Most conservatoire music courses.", "done": false}, {"id": "d-oxford-ucas", "title": "UCAS deadline", "institution": "University of Oxford", "country": "UK", "type": "Application", "date": "2026-10-15", "time": "18:00", "timezone": "UK time", "priority": "high", "link": "", "notes": "Courses may also need an admissions test and/or written work.", "done": false}, {"id": "d-cambridge-ucas", "title": "UCAS deadline", "institution": "University of Cambridge", "country": "UK", "type": "Application", "date": "2026-10-15", "time": "18:00", "timezone": "UK time", "priority": "high", "link": "", "notes": "", "done": false}, {"id": "d-cambridge-mca", "title": "My Cambridge Application", "institution": "University of Cambridge", "country": "UK", "type": "Other", "date": "2026-10-22", "time": "18:00", "timezone": "UK time", "priority": "high", "link": "", "notes": "Cambridge's own extra form, after the UCAS application.", "done": false}, {"id": "d-ucas-medicine", "title": "Medicine, dentistry & veterinary deadline", "institution": "UCAS (all UK universities)", "country": "UK", "type": "Application", "date": "2026-10-15", "time": "18:00", "timezone": "UK time", "priority": "high", "link": "https://www.ucas.com/", "notes": "Most medicine, dentistry and veterinary courses.", "done": false}, {"id": "d-ucas-main", "title": "Equal consideration deadline (most courses)", "institution": "UCAS (all UK universities)", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "high", "link": "https://www.ucas.com/", "notes": "Applies to all courses without a 15 Oct deadline. A few university pages say 14 Jan; UCAS says 13 Jan.", "done": false}, {"id": "d-uk-imperial", "title": "UCAS equal consideration deadline", "institution": "Imperial College London", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-lse", "title": "UCAS equal consideration deadline", "institution": "London School of Economics (LSE)", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-ucl", "title": "UCAS equal consideration deadline", "institution": "University College London (UCL)", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-kcl", "title": "UCAS equal consideration deadline", "institution": "King's College London", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-edinburgh", "title": "UCAS equal consideration deadline", "institution": "University of Edinburgh", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-manchester", "title": "UCAS equal consideration deadline", "institution": "University of Manchester", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-warwick", "title": "UCAS equal consideration deadline", "institution": "University of Warwick", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-bristol", "title": "UCAS equal consideration deadline", "institution": "University of Bristol", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-standrews", "title": "UCAS equal consideration deadline", "institution": "University of St Andrews", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-uk-durham", "title": "UCAS equal consideration deadline", "institution": "Durham University", "country": "UK", "type": "Application", "date": "2027-01-13", "time": "18:00", "timezone": "UK time", "priority": "normal", "link": "", "notes": "Via UCAS. Medicine, dentistry and vet courses were due 15 Oct 2026.", "done": false}, {"id": "d-eth-exam-reg", "title": "Entrance exam registration (if required)", "institution": "ETH Zurich", "country": "Switzerland", "type": "Admissions test", "date": "2026-10-15", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Only for applicants whose foreign certificate needs the ETH entrance exam.", "done": false}, {"id": "d-eth-apply", "title": "Bachelor application (foreign school certificate)", "institution": "ETH Zurich", "country": "Switzerland", "type": "Application", "date": "2027-03-31", "time": "23:59", "timezone": "CET", "priority": "high", "link": "", "notes": "Window 1 Dec 2026 – 31 Mar 2027 in eApply. Late applications not accepted. Most bachelor's taught in German (C1).", "done": false}, {"id": "d-eth-medicine", "title": "Human Medicine pre-registration (swissuniversities)", "institution": "ETH Zurich", "country": "Switzerland", "type": "Application", "date": "2027-02-15", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Register with swissuniversities, then with ETH via eApply.", "done": false}, {"id": "d-epfl-exam-reg", "title": "Entrance exam registration (if required)", "institution": "EPFL", "country": "Switzerland", "type": "Admissions test", "date": "2026-12-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Registration 1 Oct – 1 Dec 2026, for certificates that don't give direct admission. Exams 18–22 Jan 2027.", "done": false}, {"id": "d-epfl-apply", "title": "Bachelor application", "institution": "EPFL", "country": "Switzerland", "type": "Application", "date": "2027-04-30", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "Bachelor's taught in French. Applicants needing a visa should apply well before this. Verify on the university's site.", "done": false}, {"id": "d-bocconi-early", "title": "Early Session application", "institution": "Bocconi University", "country": "Italy", "type": "Application", "date": "2026-09-29", "time": "15:00", "timezone": "Italian time", "priority": "high", "link": "", "notes": "Results mid-Nov 2026. Bocconi test (or SAT) must be taken before applying.", "done": false}, {"id": "d-bocconi-winter", "title": "Winter Session application", "institution": "Bocconi University", "country": "Italy", "type": "Application", "date": "2027-01-26", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "Window 25 Nov 2026 – 26 Jan 2027. Results mid-March 2027. Last Bocconi test date 21 Jan 2027.", "done": false}, {"id": "d-bocconi-spring", "title": "Spring Session application", "institution": "Bocconi University", "country": "Italy", "type": "Application", "date": "2027-04-27", "time": "15:00", "timezone": "Italian time", "priority": "normal", "link": "", "notes": "Window 8–27 Apr 2027, for the last 5–10% of places. Bocconi's Italian page lists this round but its English page mentions only Early and Winter, so it may not be open to international applicants. Verify on the university's site.", "done": false}, {"id": "d-sciencespo-1", "title": "International undergraduate – round 1", "institution": "Sciences Po", "country": "France", "type": "Application", "date": "2026-11-04", "time": "23:59", "timezone": "Paris time", "priority": "normal", "link": "", "notes": "Results mid-January 2027.", "done": false}, {"id": "d-sciencespo-2", "title": "International undergraduate – round 2", "institution": "Sciences Po", "country": "France", "type": "Application", "date": "2027-01-13", "time": "23:59", "timezone": "Paris time", "priority": "high", "link": "", "notes": "Results early April 2027. Also the Émile Boutmy scholarship deadline.", "done": false}, {"id": "d-sciencespo-3", "title": "International undergraduate – final deadline", "institution": "Sciences Po", "country": "France", "type": "Application", "date": "2027-03-01", "time": "23:59", "timezone": "Paris time", "priority": "normal", "link": "", "notes": "Results early May 2027. Dates taken from admissions guides, not Sciences Po directly. Verify on the university's site.", "done": false}, {"id": "d-uva-nf", "title": "Numerus fixus (selective) programmes", "institution": "University of Amsterdam", "country": "Netherlands", "type": "Application", "date": "2027-01-15", "time": "23:59", "timezone": "CET", "priority": "high", "link": "", "notes": "Apply in Studielink (opens 1 Oct 2026). e.g. Psychology, Political Science (English track), Business Administration (English track).", "done": false}, {"id": "d-uva-scholarship", "title": "Non-EU applicants applying for a scholarship", "institution": "University of Amsterdam", "country": "Netherlands", "type": "Application", "date": "2027-03-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Applies to non-selective programmes.", "done": false}, {"id": "d-uva-nonnf", "title": "Non-selective programmes – non-EU / visa / housing", "institution": "University of Amsterdam", "country": "Netherlands", "type": "Application", "date": "2027-04-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "EU/EEA applicants not needing housing: 1 May 2027.", "done": false}, {"id": "d-delft-nf", "title": "Numerus fixus programmes (e.g. Aerospace, Computer Science)", "institution": "TU Delft", "country": "Netherlands", "type": "Application", "date": "2027-01-15", "time": "23:59", "timezone": "CET", "priority": "high", "link": "", "notes": "Apply via Studielink. Final ranking mid-April.", "done": false}, {"id": "d-delft-other", "title": "Other bachelor's (international diploma)", "institution": "TU Delft", "country": "Netherlands", "type": "Application", "date": "2027-04-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Also the deadline for one back-up programme if applying to a numerus fixus programme.", "done": false}, {"id": "d-leiden-luc-early", "title": "LUC The Hague – early bird deadline", "institution": "Leiden University", "country": "Netherlands", "type": "Application", "date": "2026-12-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Liberal Arts & Sciences: Global Challenges. Applications stay open until 15 Mar 2027.", "done": false}, {"id": "d-leiden-luc-final", "title": "LUC The Hague – final deadline", "institution": "Leiden University", "country": "Netherlands", "type": "Application", "date": "2027-03-15", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Liberal Arts & Sciences: Global Challenges.", "done": false}, {"id": "d-leiden-visa", "title": "Bachelor's – non-EU applicants needing a visa", "institution": "Leiden University", "country": "Netherlands", "type": "Application", "date": "2027-04-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "EU/EEA: 1 May 2027. Check each programme page.", "done": false}, {"id": "d-kuleuven", "title": "Bachelor's – non-EEA applicants", "institution": "KU Leuven", "country": "Belgium", "type": "Application", "date": "2027-03-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "EEA applicants: later (June/July). Year not printed on the official page. Verify on the university's site.", "done": false}, {"id": "d-tcd-priority", "title": "Non-EU priority deadline (Medicine, Dental, Music, Drama: final)", "institution": "Trinity College Dublin", "country": "Ireland", "type": "Application", "date": "2027-02-01", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "Non-EU apply directly via my.tcd.ie. Other courses reportedly stay open after this, subject to places. EU applicants use CAO. Verify on the university's site.", "done": false}, {"id": "d-se-lund", "title": "International admission round (universityadmissions.se)", "institution": "Lund University", "country": "Sweden", "type": "Application", "date": "2027-01-15", "time": "23:59", "timezone": "CET", "priority": "high", "link": "", "notes": "Round opens 16 Oct 2026. Non-EU/EEA applicants must use this round. Documents & fee due 1 Feb 2027.", "done": false}, {"id": "d-se-ki", "title": "Bachelor's in Biomedicine (universityadmissions.se)", "institution": "Karolinska Institutet", "country": "Sweden", "type": "Application", "date": "2027-01-15", "time": "23:59", "timezone": "CET", "priority": "normal", "link": "", "notes": "Supporting documents due 1 Feb 2027.", "done": false}, {"id": "d-se-uppsala", "title": "International admission round (universityadmissions.se)", "institution": "Uppsala University", "country": "Sweden", "type": "Application", "date": "2027-01-15", "time": "23:59", "timezone": "CET", "priority": "normal", "link": "", "notes": "Supporting documents due 1 Feb 2027.", "done": false}, {"id": "d-se-sse", "title": "International application (universityadmissions.se + SSE portal)", "institution": "Stockholm School of Economics", "country": "Sweden", "type": "Application", "date": "2027-01-15", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "Two applications needed: universityadmissions.se and SSE's own portal. Digital interviews mid-Feb 2027.", "done": false}, {"id": "d-se-docs", "title": "Supporting documents & application fee deadline", "institution": "universityadmissions.se (Sweden)", "country": "Sweden", "type": "Other", "date": "2027-02-01", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "For all Swedish universities above. SSE lists 2 Feb for documents.", "done": false}, {"id": "d-ie-early", "title": "Early Round", "institution": "IE University", "country": "Spain", "type": "Application", "date": "2026-09-18", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Decisions by 23 Oct 2026.", "done": false}, {"id": "d-ie-r1", "title": "Round 1", "institution": "IE University", "country": "Spain", "type": "Application", "date": "2026-11-06", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Decision 5–7 weeks after the deadline.", "done": false}, {"id": "d-ie-r2", "title": "Round 2", "institution": "IE University", "country": "Spain", "type": "Application", "date": "2027-01-15", "time": "", "timezone": "", "priority": "high", "link": "", "notes": "Earlier rounds have more places and financial aid. Round dates taken from an admissions guide citing ie.edu. Verify on the university's site.", "done": false}, {"id": "d-ie-r3", "title": "Round 3", "institution": "IE University", "country": "Spain", "type": "Application", "date": "2027-03-05", "time": "", "timezone": "", "priority": "normal", "link": "", "notes": "Followed by a post-rounds period if places remain. Verify on the university's site.", "done": false}];
+  async function loadDefaults() {
+    let data = EMBEDDED_DEFAULTS;
+    try {
+      const res = await fetch("deadlines.json", { cache: "no-store" });
+      if (res.ok) data = await res.json();
+    } catch (_) { /* fall back to embedded data */ }
+    return data.map(normalise).filter(isValid);
+  }
+  // Default deadlines have ids starting "d-". Ones the user deletes are remembered so they don't come back.
+  const DELETED_KEY = "deadline-calendar:deleted-defaults";
+  function getDeleted() { try { return new Set(JSON.parse(localStorage.getItem(DELETED_KEY)) || []); } catch (_) { return new Set(); } }
+  function markDeleted(ids) {
+    const s = getDeleted(); ids.filter((id) => String(id).startsWith("d-")).forEach((id) => s.add(id));
+    try { localStorage.setItem(DELETED_KEY, JSON.stringify([...s])); } catch (_) {}
+  }
+  async function load() {
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (_) {}
+    const isSample = (d) => /^SAMPLE ENTRY/.test(d.notes || "") || /^Sample (University|College|UK University|Art School)( [A-E])?$/.test(d.institution || "");
+    let list = Array.isArray(stored) ? stored.map(normalise).filter(isValid).filter((d) => !isSample(d)) : [];
+    let defaults = [];
+    try { defaults = await loadDefaults(); } catch (_) {}
+    // Add any default deadlines this browser doesn't have yet (and hasn't deleted)
+    const have = new Set(list.map((d) => d.id)), deleted = getDeleted();
+    for (const d of defaults) if (!have.has(d.id) && !deleted.has(d.id)) list.push(d);
+    state.deadlines = list;
+    save();
+  }
+
+  // ---------- Filtering ----------
+  function colorFor(type) { return TYPE_COLORS[type] || TYPE_COLORS.Other; }
+  function filtered() {
+    const { search, country, type, hideDone } = state.filters;
+    const q = search.toLowerCase();
+    return state.deadlines.filter((d) => {
+      if (country && d.country !== country) return false;
+      if (type && d.type !== type) return false;
+      if (hideDone && d.done) return false;
+      if (q && ![d.title, d.institution, d.notes, d.country, d.type].join(" ").toLowerCase().includes(q)) return false;
+      return true;
+    }).sort((a, b) => (a.date + (a.time || "99")).localeCompare(b.date + (b.time || "99")));
+  }
+  function byDate(list) {
+    const map = {};
+    for (const d of list) (map[d.date] ||= []).push(d);
+    return map;
+  }
+
+  // ---------- Rendering ----------
+  function render() {
+    renderFilterOptions();
+    $("todayLabel").textContent = "Today: " + fmtDate(todayKey(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const list = filtered();
+    if (state.view === "month") {
+      $("calendarView").hidden = false; $("agendaView").hidden = true;
+      $("periodLabel").textContent = state.cursor.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+      renderMonth(list);
+    } else {
+      $("calendarView").hidden = true; $("agendaView").hidden = false;
+      $("periodLabel").textContent = "All deadlines";
+      renderAgenda(list);
+    }
+    renderUpcoming(list);
+    renderLegend();
+  }
+
+  function renderFilterOptions() {
+    const countries = [...new Set(state.deadlines.map((d) => d.country).filter(Boolean))].sort();
+    const types = [...new Set([...Object.keys(TYPE_COLORS), ...state.deadlines.map((d) => d.type)])];
+    fillSelect($("countryFilter"), countries, "All countries", state.filters.country);
+    fillSelect($("typeFilter"), types, "All types", state.filters.type);
+    $("countryList").innerHTML = countries.map((c) => `<option value="${esc(c)}">`).join("");
+  }
+  function fillSelect(sel, values, allLabel, current) {
+    sel.innerHTML = `<option value="">${allLabel}</option>` +
+      values.map((v) => `<option ${v === current ? "selected" : ""} value="${esc(v)}">${esc(v)}</option>`).join("");
+  }
+
+  function renderMonth(list) {
+    const map = byDate(list);
+    const first = state.cursor;
+    const offset = (first.getDay() + 6) % 7; // Monday-first
+    const start = new Date(first.getFullYear(), first.getMonth(), 1 - offset);
+    const weeks = Math.ceil((offset + new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()) / 7);
+    const tKey = todayKey();
+    let html = `<div class="weekdays">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d) => `<div>${d}</div>`).join("")}</div><div class="grid">`;
+    for (let i = 0; i < weeks * 7; i++) {
+      const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const key = toKey(day);
+      const items = map[key] || [];
+      const cls = ["cell", day.getMonth() !== first.getMonth() ? "other" : "", key === tKey ? "today" : ""].join(" ");
+      const shown = items.slice(0, 3).map((d) => chip(d)).join("");
+      const more = items.length > 3 ? `<span class="more">+${items.length - 3} more</span>` : "";
+      html += `<div class="${cls}" data-day="${key}"><span class="num">${day.getDate()}</span>${shown}${more}</div>`;
+    }
+    $("calendarView").innerHTML = html + "</div>";
+  }
+  function chip(d) {
+    const c = colorFor(d.type);
+    const label = (d.institution ? d.institution + " — " : "") + d.title;
+    return `<div class="chip ${d.done ? "done" : ""} ${d.priority === "high" ? "high" : ""}" data-id="${d.id}"
+      style="border-color:${c};background:${c}1a" title="${esc(label)}">${esc(label)}</div>`;
+  }
+
+  function renderAgenda(list) {
+    if (!list.length) { $("agendaView").innerHTML = `<div class="empty">No deadlines match your filters.</div>`; return; }
+    let html = "", lastMonth = "";
+    for (const d of list) {
+      const m = fmtDate(d.date, { month: "long", year: "numeric" });
+      if (m !== lastMonth) { html += `<h4>${m}</h4>`; lastMonth = m; }
+      const cd = countdownLabel(d.date);
+      html += `<div class="agenda-item ${d.done ? "done" : ""}" data-id="${d.id}" style="border-color:${colorFor(d.type)}">
+        <div class="d">${fmtDate(d.date, { weekday: "short", day: "numeric", month: "short" })}${d.time ? `<div class="meta">${esc(d.time)} ${esc(d.timezone)}</div>` : ""}</div>
+        <div><div class="t">${d.priority === "high" ? "⚑ " : ""}${esc(d.title)}</div>
+          <div class="meta">${[d.institution, d.country, d.type].filter(Boolean).map(esc).join(" · ")}</div></div>
+        <span class="badge ${d.done ? "" : cd.cls}">${d.done ? "Done" : cd.text}</span>
+      </div>`;
+    }
+    $("agendaView").innerHTML = html;
+  }
+
+  function renderUpcoming(list) {
+    const t = todayKey();
+    const up = list.filter((d) => d.date >= t && !d.done).slice(0, 8);
+    $("upcomingList").innerHTML = up.length ? up.map((d) => {
+      const cd = countdownLabel(d.date);
+      return `<li data-id="${d.id}" style="border-color:${colorFor(d.type)}">
+        <div class="t">${esc(d.institution ? d.institution + " — " : "")}${esc(d.title)}</div>
+        <div class="meta"><span>${fmtDate(d.date, { day: "numeric", month: "short", year: "numeric" })}</span><span class="badge ${cd.cls}">${cd.text}</span></div>
+      </li>`;
+    }).join("") : `<li class="empty" style="border:none">Nothing upcoming 🎉</li>`;
+  }
+
+  function renderLegend() {
+    const used = new Set(state.deadlines.map((d) => d.type));
+    $("legend").innerHTML = Object.entries(TYPE_COLORS).filter(([t]) => used.has(t))
+      .map(([t, c]) => `<li><span class="swatch" style="background:${c}"></span>${t}</li>`).join("") || `<li class="meta">—</li>`;
+  }
+
+  // ---------- Dialogs ----------
+  function openEdit(id = null, presetDate = null) {
+    state.editingId = id;
+    const f = $("editForm");
+    f.reset();
+    const d = id ? state.deadlines.find((x) => x.id === id) : null;
+    $("dialogTitle").textContent = d ? "Edit deadline" : "Add deadline";
+    $("deleteBtn").hidden = !d;
+    const src = d || { date: presetDate || todayKey(), type: "Application", priority: "normal" };
+    for (const k of ["title", "institution", "country", "type", "date", "time", "timezone", "priority", "link", "notes"]) {
+      if (f.elements[k]) f.elements[k].value = src[k] || "";
+    }
+    if (f.elements.type.value === "" ) f.elements.type.value = "Other";
+    f.elements.done.checked = !!src.done;
+    $("editDialog").showModal();
+  }
+
+  function openDay(key) {
+    state.dayDialogDate = key;
+    $("dayTitle").textContent = fmtDate(key, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const items = filtered().filter((d) => d.date === key);
+    $("dayList").innerHTML = items.length ? items.map((d) => `
+      <li data-id="${d.id}" style="border-color:${colorFor(d.type)}">
+        <strong>${esc(d.title)}</strong>${d.done ? " ✓" : ""}
+        <div class="meta">${[d.institution, d.country, d.type, d.time && `${d.time} ${d.timezone}`].filter(Boolean).map(esc).join(" · ")}</div>
+        ${d.notes ? `<div class="meta">${esc(d.notes)}</div>` : ""}
+        ${safeUrl(d.link) ? `<a href="${esc(d.link)}" target="_blank" rel="noopener">Open link ↗</a>` : ""}
+      </li>`).join("") : `<li class="empty" style="border:none">No deadlines on this day.</li>`;
+    $("dayDialog").showModal();
+  }
+
+  // ---------- CSV / ICS ----------
+  function parseCSV(text) {
+    const rows = []; let row = [], field = "", inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQ) {
+        if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+        else field += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ",") { row.push(field); field = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); rows.push(row); row = []; field = "";
+      } else field += ch;
+    }
+    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    return rows.filter((r) => r.some((c) => c.trim() !== ""));
+  }
+  // Accepts YYYY-MM-DD, DD/MM/YYYY (UK style) or anything Date can parse.
+  function normaliseDate(s) {
+    s = String(s || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const uk = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if (uk) return `${uk[3]}-${uk[2].padStart(2, "0")}-${uk[1].padStart(2, "0")}`;
+    const d = new Date(s);
+    return isNaN(d) ? "" : toKey(d);
+  }
+  function importCSV(text) {
+    const rows = parseCSV(text.replace(/^﻿/, ""));
+    if (rows.length < 2) throw new Error("CSV needs a header row and at least one data row.");
+    const header = rows[0].map((h) => h.trim().toLowerCase());
+    const alias = { university: "institution", school: "institution", deadline: "date", category: "type", url: "link", completed: "done" };
+    const cols = header.map((h) => alias[h] || h);
+    if (!cols.includes("title") || !cols.includes("date")) throw new Error('CSV must include "title" and "date" columns.');
+    let added = 0, skipped = 0;
+    for (const r of rows.slice(1)) {
+      const obj = {};
+      cols.forEach((c, i) => { obj[c] = r[i] ?? ""; });
+      obj.date = normaliseDate(obj.date);
+      const d = normalise(obj);
+      if (isValid(d)) { state.deadlines.push(d); added++; } else skipped++;
+    }
+    save(); render();
+    toast(`Imported ${added} deadline(s)` + (skipped ? `, skipped ${skipped} invalid row(s)` : ""));
+  }
+  function exportCSV() {
+    const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [CSV_FIELDS.join(",")].concat(state.deadlines.map((d) => CSV_FIELDS.map((f) => q(d[f])).join(",")));
+    download("deadlines.csv", lines.join("\n"), "text/csv");
+  }
+  function exportICS() {
+    const esc2 = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/[,;]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Deadline Calendar//EN", "CALSCALE:GREGORIAN"];
+    for (const d of filtered()) {
+      const start = d.date.replace(/-/g, "");
+      const end = toKey(new Date(fromKey(d.date).getTime() + 86400000)).replace(/-/g, "");
+      const desc = [d.time && `Time: ${d.time} ${d.timezone}`, d.type, d.country, d.notes, d.link].filter(Boolean).join("\n");
+      lines.push("BEGIN:VEVENT", `UID:${d.id}@deadline-calendar`, `DTSTAMP:${stamp}`,
+        `DTSTART;VALUE=DATE:${start}`, `DTEND;VALUE=DATE:${end}`,
+        `SUMMARY:${esc2((d.institution ? d.institution + " — " : "") + d.title)}`,
+        `DESCRIPTION:${esc2(desc)}`,
+        "BEGIN:VALARM", "TRIGGER:-P7D", "ACTION:DISPLAY", "DESCRIPTION:Deadline in 7 days", "END:VALARM",
+        "END:VEVENT");
+    }
+    lines.push("END:VCALENDAR");
+    download("deadlines.ics", lines.join("\r\n"), "text/calendar");
+  }
+  function download(name, content, type) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([content], { type }));
+    a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // ---------- Utils ----------
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function safeUrl(u) { return /^https?:\/\//i.test(u || ""); }
+  let toastTimer;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3000);
+  }
+
+  // ---------- Events ----------
+  function bind() {
+    $("prevBtn").onclick = () => { state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1); render(); };
+    $("nextBtn").onclick = () => { state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1); render(); };
+    $("todayBtn").onclick = () => { state.cursor = startOfMonth(new Date()); render(); };
+    $("addBtn").onclick = () => openEdit();
+
+    document.querySelectorAll(".seg button").forEach((b) => b.onclick = () => {
+      document.querySelectorAll(".seg button").forEach((x) => x.classList.toggle("active", x === b));
+      state.view = b.dataset.view; render();
+    });
+
+    $("searchInput").oninput = (e) => { state.filters.search = e.target.value; render(); };
+    $("countryFilter").onchange = (e) => { state.filters.country = e.target.value; render(); };
+    $("typeFilter").onchange = (e) => { state.filters.type = e.target.value; render(); };
+    $("hideDone").onchange = (e) => { state.filters.hideDone = e.target.checked; render(); };
+
+    // Calendar clicks: chip → edit, cell → day view
+    $("calendarView").onclick = (e) => {
+      const c = e.target.closest(".chip");
+      if (c) return openEdit(c.dataset.id);
+      const cell = e.target.closest(".cell");
+      if (cell) openDay(cell.dataset.day);
+    };
+    $("agendaView").onclick = (e) => { const it = e.target.closest("[data-id]"); if (it) openEdit(it.dataset.id); };
+    $("upcomingList").onclick = (e) => {
+      const it = e.target.closest("[data-id]"); if (!it) return;
+      const d = state.deadlines.find((x) => x.id === it.dataset.id);
+      if (d) { state.cursor = startOfMonth(fromKey(d.date)); render(); openDay(d.date); }
+    };
+    $("dayList").onclick = (e) => {
+      if (e.target.closest("a")) return;
+      const it = e.target.closest("[data-id]"); if (!it) return;
+      $("dayDialog").close(); openEdit(it.dataset.id);
+    };
+    $("dayAddBtn").onclick = () => { $("dayDialog").close(); openEdit(null, state.dayDialogDate); };
+    $("dayCloseBtn").onclick = () => $("dayDialog").close();
+
+    // Edit form
+    $("editForm").onsubmit = (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const data = Object.fromEntries(new FormData(f).entries());
+      data.done = f.elements.done.checked;
+      const d = normalise({ ...data, id: state.editingId || undefined });
+      if (!isValid(d)) return toast("Please enter a title and a valid date.");
+      const idx = state.deadlines.findIndex((x) => x.id === d.id);
+      if (idx >= 0) state.deadlines[idx] = d; else state.deadlines.push(d);
+      save(); $("editDialog").close(); render(); toast("Saved");
+    };
+    $("cancelBtn").onclick = () => $("editDialog").close();
+    $("deleteBtn").onclick = () => {
+      if (!state.editingId) return;
+      markDeleted([state.editingId]);
+      state.deadlines = state.deadlines.filter((x) => x.id !== state.editingId);
+      save(); $("editDialog").close(); render(); toast("Deleted");
+    };
+
+    // Data menu
+    $("menuBtn").onclick = (e) => { e.stopPropagation(); $("menuList").hidden = !$("menuList").hidden; };
+    document.addEventListener("click", () => ($("menuList").hidden = true));
+    $("importCsvBtn").onclick = () => $("csvInput").click();
+    $("csvInput").onchange = async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      try { importCSV(await file.text()); } catch (err) { toast(err.message); }
+      e.target.value = "";
+    };
+    $("exportCsvBtn").onclick = exportCSV;
+    $("exportIcsBtn").onclick = exportICS;
+    $("resetBtn").onclick = async () => {
+      // Two-click confirmation instead of a blocking confirm() dialog
+      const b = $("resetBtn");
+      if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Click again to delete everything"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Clear all deadlines"; }, 4000); return; }
+      b.dataset.armed = ""; b.textContent = "Clear all deadlines";
+      markDeleted(state.deadlines.map((d) => d.id));
+      state.deadlines = []; save(); render(); toast("All deadlines cleared");
+    };
+
+    // Keyboard: ← → to change month, "n" for new
+    document.addEventListener("keydown", (e) => {
+      if (document.querySelector("dialog[open]") || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+      if (e.key === "ArrowLeft") $("prevBtn").click();
+      if (e.key === "ArrowRight") $("nextBtn").click();
+      if (e.key.toLowerCase() === "n") openEdit();
+      if (e.key.toLowerCase() === "t") $("todayBtn").click();
+    });
+  }
+
+  // ---------- Init ----------
+  bind();
+  load().then(render);
+})();
+
+</script>
+</body>
+</html>
